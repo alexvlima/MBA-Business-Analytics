@@ -1,0 +1,286 @@
+---
+title: "Análise de Inadimplência"
+author: "Alberto Vallim, Alexandre Lima e Luiz Hissashi"
+date: "FGV, Fevereiro/2018"
+output:
+  ioslides_presentation: default
+  slidy_presentation: default
+---
+<style>
+body {
+  text-align: justify
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+Sys.setenv("plotly_username"="hissashirocha")
+Sys.setenv("plotly_api_key"="UJMHA5f29EOzFDfHyiJj")
+
+# Importanto bibliotecas
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(maptools)
+library(ggmap)
+library(RCurl)
+library(RJSONIO)
+library(plotly)
+library(shiny)
+library(cluster)
+
+# Criando dataframes à partir dos arquivos
+setwd ("/Volumes/DISK_IMG/MBA-FGV/Analise_de_Dados_com_R/dados/czech")
+temp <- list.files(pattern="*.asc")
+
+list2env(
+  lapply(setNames(temp, make.names(gsub("*.asc$", "", temp))), 
+         read.csv2), envir = .GlobalEnv)
+
+# Adicionando a variável sexo e separando dia, mês e ano
+client2 <- client %>% 
+  separate(birth_number,c("A","M","D"),sep = c(2,4)) %>% 
+  mutate(A = as.numeric(A), M = as.numeric(M), D = as.numeric(D)) %>%
+  mutate(sex = ifelse(M > 50,"F","M"), M = ifelse(M > 50,M - 50,M))
+
+```
+## Objetivo
+
+
+A base de dados que é objeto deste estudo apresenta informações de clientes para os quais o banco da República Tcheca prestou serviços financeiros durante a década de 90, dentre os quais empréstimos bancários. 
+
+Utilizando tais dados, o trabalho em questão se propõe a encontrar os fatores que caracterizam os empréstimos não honrados bem como os respectivos clientes inadimplentes.
+
+
+## Conhecendo a base de dados
+
+
+A base de dados contém <b>4500</b> contas bancárias, com <b>5369</b> clientes proprietários de contas ou representantes legais, mais de <b>1 milhão</b> transações, <b>682</b> empréstimos realizados e dados demográficos de <b>77</b> distritos da Replúplica Tcheca, na década de 90.
+
+Nos próximos slides, iremos explorar os dados da base testando as hipóteses de relação entre os atributos e a inadimplência.
+
+## Empréstimo e Situação de Pagamento
+
+A situação de pagamento dos <b>682</b> empréstimos realizados foram classificados em <b>4</b> categorias:
+<font size="3"><b>A</b> - Contrato concluído, sem problemas | <b>B</b> - Contrato concluído, não honrado | <b>C</b> - Contrato em andamento\*, sem problemas | <b>D</b> - contrato em andamento\*, com pagamento em atraso.
+</font><br>
+<font size="2">* no momento da apuração</font>
+```{r, echo = FALSE, out.width="80%", out.height="15%", fig.align='center' }
+
+loan %>% group_by(status) %>% count() %>% ggplot(aes(x = status, y = n) )+ 
+    geom_bar(stat = "identity",aes(fill = status)) +
+    xlab("") + ylab("") +
+    geom_text(aes(label = n), vjust = -0.3)
+```
+
+## Gênero
+
+Apesar da diferença entre os gêneros não ser significativa para <b>clientes que pegaram empréstimo</b> com o banco, nota-se que as mulheres são maioria, conforme grafico:
+
+```{r, echo = FALSE, out.width="80%", fig.align='center'}
+
+# Trazer o dado de cliente que tomou empréstimo
+loan2 <- loan %>% 
+  left_join(disp,"account_id") %>% 
+  left_join(client2,"client_id")
+
+# Mais de 280 contas estão com 2 clientes vinculados (Owner e Disponent)
+# loan2 %>% group_by(account_id) %>% filter(n()>1)
+
+# Retirando duplicação, mantendo apenas o OWNER vinculado
+loan2 <- loan2 %>% filter(type=="OWNER")
+# Ver a proporção de clientes que pegaram empréstimo
+
+analise_sexo2 <-loan2 %>% 
+  group_by(sex) %>%
+  count()
+
+analise_sexo2 %>% 
+  ggplot(aes(x = sex, y = n)) + 
+  geom_bar(stat = "identity",aes(fill = sex)) +
+  xlab("") + ylab("") +
+  geom_text(aes(label = n), vjust = 3)
+
+# Inadimplentes
+loan2 <- loan2 %>% mutate(inadimplente = ifelse(status %in% c("B","D"),"S","N"))
+
+```
+
+## Gênero e Inadimplência
+
+Ao testar a hipótese da relação entre a variável gênero e status do empréstimo utilizando o teste Chi-Quadrado, podemos perceber que o gênero não é um atributo que caracteriza a inadimplência, conforme p-valor resultante:
+
+```{r cars, echo = FALSE, message=FALSE}
+
+teste1 <- table(loan2$sex,loan2$status) %>%
+  chisq.test()
+teste1[3]
+
+```
+
+## Idade
+
+Observando o gráfico boxplot da idade dos clientes nos grupos de Adimplente (N) e Inadimplente (S), podemos perceber que não há muita distinção entre os dois grupos, confirmado por meio do teste T de Student, com um p-valor de 0.9423.
+
+```{r, echo = FALSE, out.width="80%", fig.align='center'}
+
+# Calculando a idade no momento do empréstimo
+loan2 <- loan2 %>% 
+  separate(date,c("Emp_A","Emp_M","Emp_D"),sep = c(2,4)) %>% 
+  mutate(Emp_D = as.numeric(Emp_D), Emp_M = as.numeric(Emp_M), Emp_A = as.numeric(Emp_A)) %>% 
+  mutate(Emp_idade = ifelse(M < Emp_M, Emp_A - A, ifelse(M == Emp_M & D <= Emp_D, Emp_A - A, Emp_A - A - 1 )))
+
+# T-student para as variáveis idade e inadimplência não rejeitam a hipótese nula 
+# boxplot(loan2$Emp_idade ~ loan2$inadimplente)
+# t.test(loan2$Emp_idade ~ loan2$inadimplente)
+
+p <- plot_ly(loan2, y = ~Emp_idade, color = ~inadimplente, type = "box") %>%
+  layout(title = "", yaxis = list(title = "Idade"))
+div(p, align="center")
+```
+
+## Demografia
+
+Analisamos também a relação entre a situação do emprestimo e as seguintes variáveis demográficas dos distritos:
+
+- Salário médio
+- Taxa de desempenho
+- Número de empreendedores
+- Número de habitantes
+- Criminalidade
+
+## Demografia e Inadimplência
+
+Ao realizar os testes de correlação, percebeu-se que não é possível confirmar as hipóteses, conforme p-valores resultantes do teste T de Student:
+
+```{r, echo = FALSE, out.width="80%", fig.align='center', message=FALSE, warning=FALSE}
+# T-student para a correlação entre salário médio do distrito 
+#     e inadimplência (p-valor = 0,3849)
+loan2 <- loan2 %>% left_join(district,c("district_id"="A1"))
+c("Salário Médio",t.test(loan2$A11 ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre a taxa de desemprego no distrito 
+#     e inadimplência (p-valor = 0,4374)
+c("Desemprego",t.test(as.double(loan2$A12) ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre o número de empreendedores do distrito 
+#     e inadimplência (p-valor = 0,1055)
+c("Nº de Empreendedores",t.test(loan2$A14 ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre o número de habitantes do distrito 
+#     e inadimplência (p-valor = 0,3653)
+c("Nº de Habitantes",t.test(loan2$A4 ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre o número de crimes cometidos no distrito 
+#     e inadimplência (p-valor = 0,1597)
+c("Criminalidade",t.test(as.numeric(loan2$A15) ~ loan2$inadimplente)[3]$p.value)
+```
+
+## Distritos
+
+O mapa abaixo identifica os distritos com nenhuma ocorrência de inadimplência dentre os clientes que contrataram empréstimo do banco:
+
+```{r, echo = FALSE, out.width="80%", fig.align='center', message=FALSE, warning=FALSE}
+
+base_geo <- data.frame(district_id = numeric(0),
+                       longitude = numeric(0),
+                       latitude = numeric(0)
+)
+
+for (i in 1:length(district$A2)){
+  local_url <- gsub(' ','+',district$A2[i])
+  local_url <- paste0(local_url,',+czech')
+  geo_json <- getURL(paste("https://maps.googleapis.com/maps/api/geocode/json?address=",local_url,"&key=AIzaSyDDm6BBCAZjuBNyexqv9AJ6HK266SQ1lGI", sep=""))
+  geolocalizacao <- fromJSON(geo_json)
+  lat <- geolocalizacao$results[[1]][["geometry"]][["location"]][["lat"]]
+  long <- geolocalizacao$results[[1]][["geometry"]][["location"]][["lng"]]
+  posicao <- c(district$A1[i],long,lat)
+  base_geo <- rbind(base_geo,posicao)
+}
+
+colnames(base_geo) <- c("district_id","longitude","latitude")
+
+
+loan3 <- loan2 %>%
+  group_by(district_id) %>%
+  summarise(prob_inad = mean(inadimplente == "S")) %>%
+  filter(prob_inad == 0.000)
+
+distritos_inad <- right_join(base_geo,loan3, "district_id")
+
+map <- get_map(location = 'Czech', zoom = 7)
+ggmap(map) +
+  geom_point(data = distritos_inad, aes(x = longitude, y = latitude), colour="blue", size = 5) +
+  guides(fill=FALSE, alpha=FALSE, size=FALSE) +
+  xlab("Longitude") +
+  ylab("Latitude")
+```
+
+
+## Distritos
+
+De forma a analisar os distritos com clientes inadimplentes, destaca-se de vermelho os distritos com um percentual de inadimplentes acima da média dos distritos.
+
+```{r, echo = FALSE, out.width="80%", fig.align='center', message=FALSE, warning=FALSE}
+
+loan3 <- loan2 %>%
+  group_by(district_id) %>%
+  summarise(prob_inad = mean(inadimplente == "S")) %>%
+  filter(prob_inad != 0)
+
+distritos_inad <- right_join(base_geo,loan3, "district_id")
+
+distritos_inad <- mutate(distritos_inad,inad = ifelse(prob_inad >= 0.2194,"Acima da média","Abaixo da média"))
+
+map <- get_map(location = 'Czech', zoom = 7)
+ggmap(map) +
+  geom_point(data = distritos_inad, aes(x = longitude, y = latitude, 
+                                  color = as.factor(distritos_inad$inad)), 
+             size = 5) +
+  scale_color_manual(name="",values=c("#005E8C","#CC2E1C")) +
+  guides(fill=FALSE, alpha=FALSE, size=FALSE) +
+  xlab("Longitude") +
+  ylab("Latitude")
+
+
+```
+
+## Empréstimo
+
+Decidimos analisar também a relação entre a inadimplência e algumas características dos empréstimos:
+
+- Valor Total do Empréstimo
+- Duração do Empréstimo
+- Valor do Pagamento Mensal
+
+## Empréstimo e Inadimplência
+
+Ao realizar os testes de hipótese, podemos afirmar que existe correlação entre a inadimplência com o valor total do empréstimo e o valor do pagamento mensal, mas não existe relação com a duração do empréstimo:
+
+```{r, echo = FALSE, out.width="80%", fig.align='center', message=FALSE, warning=FALSE}
+
+# T-student para a correlação entre o valor do empréstimo
+#     e inadimplência (p-valor = 0,0002253)
+c("Valor Total do Empréstimo",t.test(as.numeric(loan2$amount) ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre o valor do pagamento mensal do empréstimo
+#     e inadimplência (p-valor = 0,0005565)
+c("Valor do Pagamento Mensal",t.test(as.numeric(loan2$payments) ~ loan2$inadimplente)[3]$p.value)
+
+# T-student para a correlação entre a duração do empréstimo
+#     e inadimplência (p-valor = 0,4913)
+c("Duração do Empréstimo",t.test(as.numeric(loan2$duration) ~ loan2$inadimplente)[3]$p.value)
+```
+
+
+## Conclusão
+
+<font size="4"> As análises não indicam diferença significativa entre os inadimplentes e adimplentes em relação ao <b>sexo</b> e à <b>idade</b> dos clientes do Banco da República Tcheca que tomaram empréstimo. 
+
+Também não houve diferença quando analisamos os <b>dados demográficos</b> dos distritos, como salário médio, desemprego e população, e comparamos com a proporção de inadimplência em cada localidade. 
+
+Entretanto, os testes estatísticos confirmam que é possível caracterizar a inadimplência utilizando atributos do próprio empréstimo em si: o <b>valor total do empréstimo</b> e o <b>valor do pagamento mensal</b>.
+
+Por fim, nota-se <b>diferença na proporção de inadimplentes por distritos</b>. Enquanto há locais com nenhum cliente com empréstimo em atraso, alguns distritos possuem mais de 10% de clientes inadimplentes, chegando a 50% no local com mais inadimplentes.
+</font>
+
