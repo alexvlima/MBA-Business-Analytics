@@ -1,0 +1,70 @@
+# carregar a tabela iris
+data("iris")
+
+# descritiva
+head(iris)
+
+# matriz de dispersão
+#install.packages("GGally")
+library("ggplot2")
+library("GGally")
+ggpairs(iris, mapping=ggplot2::aes(colour = Species))
+
+# Análise de correlação
+cor<-cor(iris[1:4])
+round(cor,2)
+
+#testes de correlação
+library("psych")
+iris.cortest<-corr.test(iris[1:4])
+iris.cortest
+
+install.packages("corrplot")
+library(corrplot)
+corrplot(cor, type = "upper", order = "original", tl.col = "black", tl.srt = 45)
+corrplot(cor, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+
+
+# Transformação log 
+log.ir <- log(iris[, 1:4])
+ir.species <- iris[, 5]
+ir.species
+
+# aplicar PCA - scale. = TRUE utiliza matriz de correlações 
+ir.pca <- prcomp(log.ir,
+                 center = TRUE,
+                 scale. = TRUE) 
+
+names(ir.pca)
+ir.pca$sdev #desvio padr䯠das componentes principais
+sd(log.ir$)
+
+pct_info<-ir.pca$sdev/sum(ir.pca$sdev)
+cumsum(pct_info)
+
+sd(log.ir$x)
+
+# o objeto criado guarda diversas características.
+# As básicas mostradas no print são os auto-valores e auto-vetores
+print(ir.pca)
+
+# o R guarda as projeções no objeto “x” dentro do objeto criado
+head(ir.pca$x)
+
+# Escolha do número de componentes pelo método gráfico:
+# Um critério é considerar até que a explicação da variância seja significativamente menor que as anteriores – ou o critério do “cotovelo”
+plot(ir.pca, type = "l")
+
+# Podemos adotar critérios quanto à explicação da variância
+# como por exemplo: %explicado da variância >x%
+# ou explicação da variância mair que y%
+# a função summary fornece essas informações
+summary(ir.pca)
+
+# Se quisermos aplicar estas componentes a novos dados, a função predict faz isso:
+predict(ir.pca, newdata=tail(log.ir, 2))
+
+
+summary(ir.pca)
+# plot method
+plot(ir.pca, type = "l")
