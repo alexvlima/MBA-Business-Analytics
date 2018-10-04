@@ -1,0 +1,113 @@
+---
+title: "Finantial charts study with R quantmod package"
+output: html_notebook
+---
+
+Reference: http://www.quantmod.com/examples/charting/
+
+# Introducing chartSeries 
+
+```{r}
+#install.packages("quantmod")
+library("quantmod")
+getSymbols("GS") #Goldman OHLC from yahoo 
+chartSeries(GS)
+```
+
+notice the automatic matchstick style
+we'll change this in the next section
+but for now it is fine.
+
+# Charting shortcuts - barChart, lineChart, and candleChart.
+
+```{r}
+# first some high-low-close style bars, monochromatic theme 
+barChart(GS,theme='white.mono',bar.type='hlc')
+```
+
+```{r}
+# how about some candles, this time with color 
+candleChart(GS,multi.col=TRUE,theme='white')
+```
+
+```{r}
+# and now a line, with the default color scheme 
+lineChart(GS,line.type='h',TA=NULL) 
+```
+
+# Formal Arguments: Colors, subsetting, tick-marks.
+
+```{r}
+# the whole series 
+chartSeries(GS) 
+```
+
+```{r}
+# now - a little but of subsetting 
+# (December '07 to the last observation in '08) 
+candleChart(GS,subset='2007-12::2008') 
+```
+
+```{r}
+# slightly different syntax - after the fact. 
+# also changing the x-axis labeling 
+candleChart(GS,theme='white', type='candles') 
+reChart(major.ticks='months',subset='first 16 weeks')
+```
+
+# Technical Analysis and chartSeries.
+
+```{r}
+getSymbols("GS") #Goldman OHLC from yahoo 
+
+# The TA argument to chartSeries is one way to specify the 
+# indicator calls to be applied to the chart. 
+# NULL mean don't draw any. 
+
+chartSeries(GS, TA=NULL) 
+```
+
+```{r}
+# Now with some indicators applied 
+
+chartSeries(GS, theme="white",TA="addVo();addBBands();addCCI()") 
+```
+
+```{r}
+# The same result could be accomplished a 
+# bit more interactively: 
+# 
+chartSeries(GS, theme="white") #draw the chart 
+addVo() #add volume 
+addBBands() #add Bollinger Bands 
+addCCI() #add Commodity Channel Index
+```
+
+```{r}
+getSymbols("GS") #GS OHLC from yahoo 
+
+# addTA allows you to add basic indicators 
+# to your charts - even if they aren't part 
+# of quantmod. 
+
+chartSeries(GS, TA=NULL) 
+
+#Then add the Open to Close price change 
+#using the quantmod OpCl function 
+
+addTA(OpCl(GS),col='blue', type='h') 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
