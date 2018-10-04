@@ -1,0 +1,282 @@
+---
+title: "Case de Carteira Eficiente"
+output: html_notebook
+---
+
+# Preparação.
+
+Limpando o Console e o Global Environment.
+
+```{r}
+# Limpando o Console.
+cat("\014") 
+# Limpando o Global Environment.
+rm(list = ls())
+```
+
+# Importação e modelagem de dados.
+
+Instalando e ativando o pacote quantmod, para modelagem financeira.
+
+```{r}
+# install.packages("quantmod")
+library("quantmod")
+# ls('package:quantmod')
+```
+
+Dando os nomes das empresas do portifólio que será analisado.
+
+```{r}
+papeis <- c("ABEV3.SA", "ITUB4.SA", "BBDC4.SA", "BBAS3.SA", "ITSA4.SA", "PETR3.SA", "PETR4.SA", "VALE3.SA", "CIEL3.SA", "BBSE3.SA", "RADL3.SA", "LAME4.SA", "RENT3.SA", "CSAN3.SA", "MDIA3.SA", "PCAR4.SA", "BRML3.SA", "ECOR3.SA", "HGTX3.SA", "HYPE3.SA", "KROT3.SA", "ABCB4.SA", "FIBR3.SA", "NATU3.SA", "EQTL3.SA", "TRPL4.SA", "MYPK3.SA", "WEGE3.SA", "VIVT4.SA", "BRKM5.SA", "GGBR4.SA", "IGTA3.SA", "GFSA3.SA", "GOLL4.SA", "USIM5.SA", "INEP4.SA", "UNIP6.SA", "COCE5.SA", "EMBR3.SA", "OIBR4.SA", "JBSS3.SA", "BRFS3.SA", "CYRE3.SA", "ESTC3.SA", "BRAP4.SA", "MRFG3.SA")
+papeis
+#,"VALE5.SA","ELPL4.SA","SUZB5.SA","BVMF3.SA",
+```
+
+Importando da web (Yahoo) dados financeiros das empresas escolhidas.A função getSymbols faz exatamanete isso.
+
+```{r}
+# help(getSymbols)
+getSymbols(papeis, from = "2017-05-08", to = "2017-05-25")
+```
+
+Agregando-se as informações de cada empresa na tabela P pelos fechamentos de cada período (dia, no caso).
+
+```{r}
+P <- NULL
+for(papel in papeis) {
+    # help(Cl) # A função Cl serve para extrair e transformar colunas de series 
+    # temporais de objetos OHLC (Open-High-Low-Close), que é como as informações
+    # financeiras são geralmente disponibilizadas.
+    # cl é a função do pacote quantmod para ficar só com o valor de fechamento 
+    # (close).
+    # help(eval) # A função eval resolve o seu argumento principal dentro de um
+    # ambiente.
+    #--------------------------------------------------------------------------
+    #---------------------------- Exemplos de eval ----------------------------
+    
+    #eval(2 ^ 2 ^ 3)
+    #mEx <- expression(2^2^3); mEx; 1 + eval(mEx)
+    #eval({ xx <- pi; xx^2}) ; xx
+
+    #--------------------------------------------------------------------------
+    # help(parse) # A função parse pede para analisar uma palavra (parse=analisar).
+   tmp <- Cl(to.daily(eval(parse(text = papel))))
+   P <- cbind(P, tmp)
+   }
+```
+
+Atribui-se o nome das empresas às colunas da tabela P.
+
+```{r}
+colnames(P) <- papeis
+```
+
+Calculando a diferença percentual dia a dia.
+
+```{r}
+# help(diff) # A função diff calcula a diferença de lags. 
+retornos <- (diff(P)/lag(P,k=1)) * 100
+retornos <- retornos[-1,]
+```
+
+Construindo as matrizes de média e covariância.
+
+```{r}
+media_retornos <- colMeans(retornos, na.rm = TRUE)
+cov_retornos <- cov(retornos)
+```
+
+# Visualizando de covariâncias e correlações.
+
+Visualizando a covariância dos papéis.
+
+```{r}
+require(lattice)
+levelplot(cov_retornos)
+```
+
+A correlação de papéis também pode ser construída e através dela se pode ver que papéis se relacionam mais. Observar as diferenças com relação à visualização correspondentes de covariâncias (acima).
+
+```{r}
+cor_retornos <-cor(retornos)
+require(lattice)
+levelplot(cor_retornos)
+```
+
+# Visualizando risco e retorno dos papéis isoladamente.
+
+```{r}
+# Risco Esperado X Retorno Esperado de papéis individuais isolados.
+desvpad_retornos <- sqrt(diag(cov_retornos))
+risco_retorno <- cbind(media_retornos,desvpad_retornos)
+risco_retorno_df <- data.frame(risco_retorno)
+ativos <- rownames(risco_retorno_df)
+risco_retorno.condicao <- data.frame(matrix("Papéis isolados", nrow = nrow(risco_retorno)))
+risco_retorno_df <- cbind(risco_retorno.condicao, ativos, risco_retorno_df)
+rownames(risco_retorno_df) <- NULL
+names(risco_retorno_df)[1]<-paste("condicao")
+names(risco_retorno_df)[2]<-paste("carteira")
+names(risco_retorno_df)[3]<-paste("retorno_carteira")
+names(risco_retorno_df)[4]<-paste("desvpad_carteira")
+head(risco_retorno_df)
+#sapply(risco_retorno_df, class)
+library("ggplot2")
+ggplot(data = risco_retorno_df, aes(x = desvpad_carteira, y = retorno_carteira)) + 
+    geom_point(data = risco_retorno_df, colour = "red") + 
+    geom_text(data = risco_retorno_df,aes(label=carteira),hjust=0, vjust=0, colour = "red") + 
+    ggtitle("Risco Esperado X Retorno Esperado dos papéis considerados") + 
+    labs(x = "Risco Esperado (Desvio-padrão)", y = "Retorno Esperado") 
+```
+
+# Simulando e visualizando carteiras aleatórias.
+
+```{r}
+# Simulando carteiras aleatórias (Monte Carlo).
+simulacoes <- matrix(0,ncol = 3 + ncol(retornos))
+dimnames(simulacoes) <- list(NULL, c("cart.simulada",papeis,"retorno_carteira","desvpad_carteira"))
+cart.simulada <- 0
+for (i in 1:10000) {
+    cart.simulada <<- cart.simulada + 1
+    a <- c(runif(ncol(retornos)))
+    if (sum(a) == 0) { a <- a + 1e-2 }
+    a <- a / sum(a)
+    retorno_carteira <- a %*% media_retornos
+    desvpad_carteira <- sqrt(a %*% cov_retornos %*% a)
+    a <- matrix(a,nrow = 1)
+    linhanova <- cbind(cart.simulada, a, retorno_carteira, desvpad_carteira)
+    simulacoes <<- rbind(simulacoes, linhanova)
+}
+#head(simulacoes)
+simulacoes <- simulacoes[-1,]
+head(simulacoes)
+simulacoes.carteira <- simulacoes[,1]
+simulacoes.metricas <- simulacoes[, (ncol(simulacoes)-1):ncol(simulacoes)]
+risco_retorno.sims <-cbind(simulacoes.carteira,simulacoes.metricas)
+Simulacoes.condicao <- data.frame(matrix("Carteiras simuladas (Monte Carlo)", nrow = nrow(simulacoes)))
+risco_retorno.sims_df <- data.frame(risco_retorno.sims)
+risco_retorno.sims_df <- cbind(Simulacoes.condicao, risco_retorno.sims_df)
+names(risco_retorno.sims_df)[1]<-paste("condicao")
+names(risco_retorno.sims_df)[2]<-paste("carteira")
+#head(risco_retorno.sims_df)
+#sapply(risco_retorno.sims_df, class)
+risco_retorno.sims_df$carteira <- as.factor(risco_retorno.sims_df$carteira)
+#sapply(risco_retorno.sims_df, class)
+head(risco_retorno.sims_df)
+ggplot(data = risco_retorno.sims_df, aes(x = desvpad_carteira, y = retorno_carteira)) + 
+    geom_point(data = risco_retorno.sims_df, colour = "forestgreen") + 
+    geom_text(data = risco_retorno.sims_df,aes(label=simulacoes.carteira),hjust=0, vjust=0, colour = "forestgreen") +
+    ggtitle("Risco Esperado X Retorno Esperado das carteiras simuladas (Monte Carlo)") + 
+    labs(x = "Risco Esperado (Desvio-padrão)", y = "Retorno Esperado") 
+```
+
+# Definição da função objetivo.
+
+Para se encontrar uma solução ótima, esta deve ser guiada por uma função objetivo.
+
+```{r}
+# Observação1: o sinal de <<- é diferente de <-. <- atua somente sobre o ambiente
+# em que é definido. Já <<- atua também atualizando ambientes "pais".
+# Observação2: O sinal de = é diferente de ==. = é sinal de atribuição, usado dentro
+# de algumas funções como argumento. Já == é um operador lógico que verifica a igual-
+# dade e retorna TRUE ou FALSE.
+# Observação3: Se você quiser ver como funciona a função objetivo, usar 
+# a <- rep(0.2, ncol(retornos)).
+calc_funcao_obj <- function(a) {
+    if (sum(a) == 0) { a <- a + 1e-2 }
+    a <- a / sum(a)
+    retorno_carteira <- a %*% media_retornos
+    desvpad_carteira <- sqrt(a %*% cov_retornos %*% a)
+    obj <- retorno_carteira-desvpad_carteira
+    return(obj)
+    }
+```
+
+# Encontrando e visualizando a suposta carteira ótima pelo método de otimização Algoritmos Genéticos.
+
+Carregando o pacote GA, que é de Algoritmos Genéticos (Genetic Algorithms).
+
+```{r}
+# install.packages("GA")
+library(GA)
+# help(GA)
+# ls('package:GA')
+# install.packages("parallel")
+library(parallel)
+# install.packages("doParallel")
+library(doParallel)
+```
+
+Executando ALgoritmo Genético para otimizar (minimizar, no caso) a função objetivo acima definida.
+
+```{r}
+# help(GA)
+set.seed(1234)
+tempo_inicial <- Sys.time()
+GA <- ga(type = "real-valued", fitness = calc_funcao_obj, min = rep(0, ncol(retornos)), max = rep(1, ncol(retornos)), popSize = 60, pcrossover = 0.75, pmutation = 0.07, maxiter = 10000, run = 100, names = papeis, keepBest = TRUE, parallel = FALSE, monitor = TRUE, seed = 1234)
+tempo_final <- Sys.time()
+tempo_execucao <- tempo_final - tempo_inicial
+tempo_execucao
+```
+
+Avaliando resultados do Algoritmo Genético:
+
+1) Perspectiva geral.
+
+```{r}
+resultado_GA <- summary(GA)
+resultado_GA
+plot(GA)
+```
+
+2) Valor final da função objetivo.
+
+```{r}
+summary(resultado_GA)
+#resultado_GA <- summary(GA)
+#resultado_GenSA$value
+```
+
+3) Percentuais ótimos de cada papel.
+
+```{r}
+a.melhorRes_GA <- resultado_GA$solution
+a.melhorRes_GA <- a.melhorRes_GA / sum(a.melhorRes_GA)
+a.melhorRes_GA_ <- round(100 * a.melhorRes_GA, 2)
+a.melhorRes_GA_
+```
+
+4) Resultado da carteira otimizada. Retorno:
+
+```{r}
+retorno_carteira_melhorRes_GA <- sum(a.melhorRes_GA * media_retornos)
+retorno_carteira_melhorRes_GA
+```
+
+5) Resultado da carteira otimizada. Risco (variância):
+
+```{r}
+desvpad_carteira_melhorRes_GA <- sqrt(a.melhorRes_GA %*% cov_retornos %*% matrix(a.melhorRes_GA, nrow = ncol(retornos)))
+desvpad_carteira_melhorRes_GA
+```
+
+6) Visualização dos resultados em Risco X Retorno.
+
+```{r}
+risco_retorno_melhorRes_df <- data.frame(matrix(c(retorno_carteira_melhorRes_GA,desvpad_carteira_melhorRes_GA),1,2))
+risco_retorno_melhorRes_df <- cbind("Melhor carteira (Genetic Algrithm)","*",risco_retorno_melhorRes_df)
+names(risco_retorno_melhorRes_df)[1]<-paste("condicao")
+names(risco_retorno_melhorRes_df)[2]<-paste("carteira")
+names(risco_retorno_melhorRes_df)[3]<-paste("retorno_carteira")
+names(risco_retorno_melhorRes_df)[4]<-paste("desvpad_carteira")
+sapply(risco_retorno_melhorRes_df, class)
+risco_retorno_total_df <- rbind(risco_retorno_df,risco_retorno.sims_df,risco_retorno_melhorRes_df)
+head(risco_retorno_total_df)
+
+library(ggplot2)
+
+ggplot(data = risco_retorno_total_df, aes(x = desvpad_carteira, y = retorno_carteira, colour = condicao)) + 
+    geom_point(data = risco_retorno_total_df) +
+    ggtitle("Risco Esperado X Retorno Esperado dos ativos e carteiras") + 
+    labs(x = "Risco Esperado (Desvio-padrão)", y = "Retorno Esperado") 
+```
+
