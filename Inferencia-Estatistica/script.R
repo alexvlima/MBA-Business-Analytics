@@ -13,7 +13,7 @@ install.packages('readxl')
 library(readxl)
 
 base <- read_excel('base_automoveis_recodificada.xlsx', 
-				sheet = 'AUTOM?VEIS RECODIFICADA')
+				sheet = 'AUTOMÓVEIS RECODIFICADA')
 str(base)
 
 #base <- base[,-c(12:16)] 
@@ -38,7 +38,7 @@ geom_histogram()
 
 
 #############################
-### DIAGRAMA DE DISPERS?O ###
+### DIAGRAMA DE DISPERSÃO ###
 #############################
 
 plot(base$Imagem, base$Utilitário)
@@ -58,7 +58,7 @@ library(dplyr)
 fill <- "#4271AE"
 line <- "#1F3552"
 
-base %>% group_by(Prot?tipo) %>% summarise(media = mean(Imagem))
+base %>% group_by(Protótipo) %>% summarise(media = mean(Imagem))
 
 ggplot(base, aes(x = prototipo, y = Imagem)) +
         geom_boxplot(fill = fill, colour = line) +
@@ -87,7 +87,7 @@ ggplot(base, aes(x = prototipo, y = Preço)) +
 
 
 #####################################
-### CRUZAMENTO DE VARI?VEIS QUALI ###
+### CRUZAMENTO DE VARIÁVEIS QUALI ###
 #####################################
 
 install.packages('gmodels')
@@ -259,7 +259,7 @@ ggplot(base, aes(x = sexo, y = Preço)) +
 
 
 #######################
-### NÃO-PARAM?TRICO ###
+### NÃO-PARAMÉTRICO ###
 #######################
 
 shapiro.test(base$Imagem)
