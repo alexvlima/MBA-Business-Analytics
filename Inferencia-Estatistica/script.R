@@ -93,7 +93,7 @@ ggplot(base, aes(x = prototipo, y = Preço)) +
 install.packages('gmodels')
 library(gmodels)
 
-base$sexo <- factor(base$G?nero, 
+base$sexo <- factor(base$Gênero, 
 		levels=c("F","M"),
 		labels=c("Masculino","Feminino"))
 
