@@ -147,7 +147,7 @@ ggplot(data=base, aes(x=prototipo, fill=Estado_civil)) +
              size=.3) +                        
     scale_fill_manual(values=c("blue", "green")) +     
     xlab("Protótipo") + ylab("Freq.") +  
-    ggtitle("Frequ?ncia da preferência do protótipo segundo estado civil") +     
+    ggtitle("Frequência da preferência do protótipo segundo estado civil") +     
     theme_bw()
 
 #base$Renda <- factor(base$Renda, 
